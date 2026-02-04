@@ -1,41 +1,42 @@
 import numpy as np
 
+FREQ_BANDS = {
+    0: (8, 12),    # Alpha
+    1: (13, 30),   # Beta
+    2: (4, 7),     # Theta
+    3: (30, 45),   # Gamma
+}
+
 def simulate_eeg_sample(
     class_id: int,
     num_channels: int,
     num_timesteps: int,
     sampling_rate: int = 256
 ):
-    """
-    Returns:
-        signal: np.ndarray of shape (num_channels, num_timesteps)
-    """
-
-    # Time axis
     t = np.arange(num_timesteps) / sampling_rate
-
-    # Class-dependent frequency bands
-    freq_bands = {
-        0: (7, 10),    # Left
-        1: (11, 14),   # Right
-        2: (15, 20),   # Up
-        3: (20, 25)    # Down
-    }
-
-    low_f, high_f = freq_bands[class_id]
-
     signal = np.zeros((num_channels, num_timesteps))
 
+    low_f, high_f = FREQ_BANDS[class_id]
+
+    base_freq = np.random.uniform(low_f, high_f)
+
     for ch in range(num_channels):
-        freq = np.random.uniform(low_f, high_f)
+        freq = base_freq + np.random.uniform(-0.3, 0.3)
+
         phase = np.random.uniform(0, 2 * np.pi)
 
-        wave = np.sin(2 * np.pi * freq * t + phase)
-        noise = np.random.normal(0, 0.3, size=num_timesteps)
+        sinusoid = np.sin(2 * np.pi * freq * t + phase)
+        noise = 0.3 * np.random.randn(num_timesteps)
 
-        signal[ch] = wave + noise
+        signal[ch] = sinusoid + noise
+
+    mean = signal.mean(axis=1, keepdims=True)
+    std = signal.std(axis=1, keepdims=True) + 1e-6
+    signal = (signal - mean) / std
 
     return signal
+
+
 import torch
 from torch.utils.data import Dataset
 from utils.preprocessing import normalize_channels, window_signal
