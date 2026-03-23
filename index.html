@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Signal Decoder - EEG Decoding Pipeline</title>
+    <link rel="stylesheet" href="https://unicons.iconscout.com/release/v4.0.0/css/line.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #0f1419;
+            --bg-light: #1a1f2e;
+            --accent: #6366f1;
+            --accent-light: #818cf8;
+            --text: #f1f5f9;
+            --text-dim: #94a3b8;
+            --border: #2d3748;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* 3D Canvas Background */
+        #canvas3d {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            z-index: 0;
+            opacity: 1;
+            background: linear-gradient(135deg, #0f1419 0%, #1a1f2e 100%);
+        }
+
+        .content {
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Modern Floating Navigation */
+        nav {
+            position: fixed;
+            top: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 20, 25, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 50px;
+            padding: 0.8rem 2rem;
+            z-index: 100;
+            display: flex;
+            gap: 2.5rem;
+            align-items: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        nav a {
+            color: var(--text-dim);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        nav a:hover {
+            color: var(--accent);
+        }
+
+        nav a::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        nav a:hover::after {
+            width: 100%;
+        }
+
+        .nav-logo {
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: -1px;
+            margin-right: 1rem;
+            padding-right: 1rem;
+            border-right: 1px solid var(--border);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+            margin-top: -4rem;
+        }
+
+        .hero-content {
+            max-width: 800px;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 8vw, 4rem);
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--accent), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -2px;
+        }
+
+        .hero .subtitle {
+            font-size: 1.3rem;
+            color: var(--accent-light);
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-dim);
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.8;
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.9rem 2rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-light);
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--accent);
+            border: 1.5px solid var(--accent);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(99, 102, 241, 0.1);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* Sections */
+        section {
+            padding: 6rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            font-size: clamp(1.8rem, 5vw, 2.5rem);
+            font-weight: 700;
+            margin-bottom: 3rem;
+            text-align: center;
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        /* About Section */
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            align-items: center;
+            margin-top: 3rem;
+        }
+
+        .about-text h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--accent);
+        }
+
+        .about-text p {
+            color: var(--text-dim);
+            margin-bottom: 1.5rem;
+            line-height: 1.9;
+        }
+
+        .highlights {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .highlight-item {
+            background: rgba(99, 102, 241, 0.05);
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .highlight-item:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: var(--accent);
+            transform: translateY(-5px);
+        }
+
+        .highlight-item strong {
+            color: var(--accent);
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .highlight-item p {
+            font-size: 0.95rem;
+            margin: 0;
+        }
+
+        /* Metrics Section */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(99, 102, 241, 0.05));
+            border: 1px solid var(--border);
+            padding: 2rem;
+            border-radius: 12px;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .metric-card:hover {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.08));
+            border-color: var(--accent);
+            transform: translateY(-10px);
+        }
+
+        .metric-card:hover::before {
+            opacity: 1;
+        }
+
+        .metric-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        .metric-description {
+            font-size: 0.9rem;
+            color: var(--text-dim);
+        }
+
+        /* Features Section */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(99, 102, 241, 0.02));
+            border: 1px solid var(--border);
+            padding: 2rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .feature-card:hover {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.05));
+            border-color: var(--accent);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.1);
+        }
+
+        .feature-icon {
+            width: 50px;
+            height: 50px;
+            background: rgba(99, 102, 241, 0.2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            color: var(--accent);
+            font-size: 1.5rem;
+        }
+
+        .feature-card h4 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            color: var(--text);
+        }
+
+        .feature-card p {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            line-height: 1.7;
+        }
+
+        /* Architecture Section */
+        .architecture {
+            background: rgba(99, 102, 241, 0.05);
+            border: 1px solid var(--border);
+            padding: 3rem;
+            border-radius: 16px;
+            margin-top: 3rem;
+        }
+
+        .pipeline-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+            align-items: center;
+        }
+
+        .pipeline-step {
+            text-align: center;
+            position: relative;
+            padding: 1.5rem;
+            background: rgba(99, 102, 241, 0.1);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .pipeline-step:not(:last-child)::after {
+            content: '→';
+            position: absolute;
+            right: -2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--accent);
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .pipeline-step:not(:last-child)::after {
+                content: '↓';
+                right: 50%;
+                bottom: -2rem;
+                transform: translateX(50%);
+            }
+        }
+
+        .pipeline-step strong {
+            color: var(--accent);
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Tech Stack */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .tech-item {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid var(--border);
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .tech-item:hover {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--accent);
+            transform: translateY(-5px);
+        }
+
+        .tech-item strong {
+            color: var(--accent);
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .tech-item p {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+        }
+
+        /* Results Section */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .result-card {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(99, 102, 241, 0.05));
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 2rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .result-card:hover {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(99, 102, 241, 0.1));
+            border-color: var(--success);
+            transform: translateY(-8px);
+        }
+
+        .result-card h4 {
+            color: var(--success);
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .result-card p {
+            color: var(--text-dim);
+            line-height: 1.7;
+        }
+
+        /* Footer */
+        footer {
+            padding: 3rem 2rem;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            color: var(--text-dim);
+        }
+
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        footer a:hover {
+            color: var(--accent-light);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            nav {
+                gap: 1.5rem;
+                padding: 0.7rem 1.2rem;
+            }
+
+            nav a {
+                font-size: 0.85rem;
+            }
+
+            .nav-logo {
+                font-size: 0.9rem;
+                margin-right: 0.5rem;
+                padding-right: 0.5rem;
+            }
+
+            .about-grid,
+            .highlights {
+                grid-template-columns: 1fr;
+            }
+
+            .hero p {
+                font-size: 1rem;
+            }
+
+            .section-title {
+                font-size: 1.5rem;
+            }
+
+            .architecture {
+                padding: 2rem 1rem;
+            }
+
+            .cta-group {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .hero-content {
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        section {
+            animation: fadeInUp 0.6s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas Background -->
+    <canvas id="canvas3d"></canvas>
+
+    <div class="content">
+        <!-- Navigation -->
+        <nav>
+            <span class="nav-logo">NSD</span>
+            <a href="#overview">Overview</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#models">Models</a>
+            <a href="#results">Results</a>
+            <a href="#tech">Tech Stack</a>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <h1>Neural Signal Decoder</h1>
+                <div class="subtitle">EEG Signal Decoding with Frequency-Aligned Modeling</div>
+                <p>An end-to-end neural signal decoding pipeline using simulated EEG data. Evaluate multiple architectures (LSTM, Transformer, Spectral Models) with focus on engineering rigor and inductive bias alignment.</p>
+                <div class="cta-group">
+                    <a href="https://github.com/Suraj-Sedai/neural-signal-decoder" target="_blank" class="btn btn-primary">
+                        <i class="uil uil-github"></i> View Repository
+                    </a>
+                    <a href="docs/neural_signal_decoder_final_technical_documentation.md" class="btn btn-secondary">
+                        <i class="uil uil-file-alt"></i> Documentation
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Overview Section -->
+        <section id="overview">
+            <h2 class="section-title">Project Overview</h2>
+            <div class="about-grid">
+                <div class="about-text">
+                    <h3>Mission</h3>
+                    <p>Decode multichannel EEG-like signals into discrete control classes using engineered neural architectures. This project emphasizes rigorous evaluation of modeling paradigms under controlled conditions.</p>
+                    <p>By systematically evaluating different architectural approaches, we identify the inductive biases that matter most for neural signal decoding, providing insights applicable to real BCI systems.</p>
+                </div>
+                <div>
+                    <div class="highlights">
+                        <div class="highlight-item">
+                            <strong>Signal Simulation</strong>
+                            <p>Multichannel EEG with class-specific frequency bands (Alpha, Beta, Theta, Gamma) and controlled noise</p>
+                        </div>
+                        <div class="highlight-item">
+                            <strong>Multiple Architectures</strong>
+                            <p>LSTM, Transformer, and Spectral MLP models for comprehensive architectural comparison</p>
+                        </div>
+                        <div class="highlight-item">
+                            <strong>Frequency Alignment</strong>
+                            <p>Bandpower-based feature extraction reflecting established neuroscience priors</p>
+                        </div>
+                        <div class="highlight-item">
+                            <strong>Reproducibility</strong>
+                            <p>Modular design with comprehensive documentation for full reproducibility</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Metrics Section -->
+        <section>
+            <h2 class="section-title">Key Metrics</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-number">85%</div>
+                    <div class="metric-label">Test Accuracy</div>
+                    <div class="metric-description">Bandpower-based Transformer achieving state-of-the-art decoding performance</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number">4</div>
+                    <div class="metric-label">Frequency Bands</div>
+                    <div class="metric-description">Alpha, Beta, Theta, and Gamma bands for comprehensive spectral analysis</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number">8</div>
+                    <div class="metric-label">Channels</div>
+                    <div class="metric-description">Multichannel EEG simulation with realistic phase variation</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number">3</div>
+                    <div class="metric-label">Model Types</div>
+                    <div class="metric-description">LSTM, Transformer, and Spectral models for architectural comparison</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture Section -->
+        <section id="architecture">
+            <h2 class="section-title">Pipeline Architecture</h2>
+            <div class="architecture">
+                <p style="text-align: center; color: var(--text-dim); margin-bottom: 2rem;">End-to-End Neural Signal Decoding Pipeline</p>
+                <div class="pipeline-steps">
+                    <div class="pipeline-step">
+                        <strong>Signal Generation</strong>
+                        <p style="font-size: 0.85rem; color: var(--text-dim); margin: 0; margin-top: 0.5rem;">Simulated EEG with class-specific frequency bands</p>
+                    </div>
+                    <div class="pipeline-step">
+                        <strong>Preprocessing</strong>
+                        <p style="font-size: 0.85rem; color: var(--text-dim); margin: 0; margin-top: 0.5rem;">Z-score normalization per channel</p>
+                    </div>
+                    <div class="pipeline-step">
+                        <strong>Windowing</strong>
+                        <p style="font-size: 0.85rem; color: var(--text-dim); margin: 0; margin-top: 0.5rem;">Sliding window segmentation</p>
+                    </div>
+                    <div class="pipeline-step">
+                        <strong>Feature Extraction</strong>
+                        <p style="font-size: 0.85rem; color: var(--text-dim); margin: 0; margin-top: 0.5rem;">Bandpower or time-domain features</p>
+                    </div>
+                    <div class="pipeline-step">
+                        <strong>Model</strong>
+                        <p style="font-size: 0.85rem; color: var(--text-dim); margin: 0; margin-top: 0.5rem;">LSTM, Transformer, or MLP</p>
+                    </div>
+                    <div class="pipeline-step">
+                        <strong>Classification</strong>
+                        <p style="font-size: 0.85rem; color: var(--text-dim); margin: 0; margin-top: 0.5rem;">Discrete class prediction</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Models Section -->
+        <section id="models">
+            <h2 class="section-title">Model Architectures</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="uil uil-layers"></i>
+                    </div>
+                    <h4>LSTM Decoder</h4>
+                    <p>Sequential LSTM architecture for time-domain signal processing. Captures temporal dependencies but struggles with frequency-aligned features due to inductive bias mismatch.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="uil uil-cube"></i>
+                    </div>
+                    <h4>Transformer Decoder</h4>
+                    <p>Attention-based sequence model with better generalization. Time-domain Transformer shows improvement over LSTM but benefits significantly from frequency-domain features.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="uil uil-chart"></i>
+                    </div>
+                    <h4>Spectral MLP</h4>
+                    <p>Bandpower-based MLP operating on frequency-aligned features. Achieves highest accuracy by leveraging established neuroscience priors about EEG representation.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tech Stack Section -->
+        <section id="tech">
+            <h2 class="section-title">Technology Stack</h2>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <strong>Python 3.9+</strong>
+                    <p>Core language and runtime</p>
+                </div>
+                <div class="tech-item">
+                    <strong>PyTorch 2.0+</strong>
+                    <p>Deep learning framework</p>
+                </div>
+                <div class="tech-item">
+                    <strong>NumPy</strong>
+                    <p>Numerical computing</p>
+                </div>
+                <div class="tech-item">
+                    <strong>SciPy</strong>
+                    <p>Signal processing & DSP</p>
+                </div>
+                <div class="tech-item">
+                    <strong>scikit-learn</strong>
+                    <p>ML utilities & metrics</p>
+                </div>
+                <div class="tech-item">
+                    <strong>Matplotlib</strong>
+                    <p>Visualization & plotting</p>
+                </div>
+                <div class="tech-item">
+                    <strong>TQDM</strong>
+                    <p>Progress tracking</p>
+                </div>
+                <div class="tech-item">
+                    <strong>Jupyter</strong>
+                    <p>Interactive notebooks</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="results">
+            <h2 class="section-title">Key Results & Findings</h2>
+            <div class="results-grid">
+                <div class="result-card">
+                    <h4>Bandpower-Based Transformer</h4>
+                    <p>Achieves <strong>85% test accuracy</strong> by combining Transformer architecture with frequency-aligned bandpower features. This represents the best architectural-feature alignment.</p>
+                </div>
+                <div class="result-card">
+                    <h4>Inductive Bias Mismatch</h4>
+                    <p>Time-domain LSTM and Transformer show systematic performance degradation due to inductive bias mismatch with the frequency-dominant class separability in EEG signals.</p>
+                </div>
+                <div class="result-card">
+                    <h4>Feature Engineering Matters</h4>
+                    <p>Frequency-aligned features (bandpower) dramatically outperform raw time-domain features, validating neuroscience priors and emphasizing domain knowledge in neural signal processing.</p>
+                </div>
+                <div class="result-card">
+                    <h4>Reproducibility</h4>
+                    <p>Complete modular pipeline with seed control and documentation enables full reproducibility. All experimental conditions and hyperparameters are clearly specified.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <div class="footer-links">
+                <a href="https://github.com/Suraj-Sedai/neural-signal-decoder" target="_blank">
+                    <i class="uil uil-github"></i> GitHub
+                </a>
+                <a href="docs/neural_signal_decoder_final_technical_documentation.md">
+                    <i class="uil uil-file-alt"></i> Documentation
+                </a>
+                <a href="notebook/Neural_Signal_Decoding_Simulated_EEG.ipynb">
+                    <i class="uil uil-notebook"></i> Notebook
+                </a>
+            </div>
+            <p>Neural Signal Decoder © 2024 | Built with PyTorch & Modern Web Technologies</p>
+        </footer>
+    </div>
+
+    <!-- Canvas Background Script -->
+    <script>
+        // Initialize canvas for subtle animated background
+        const canvas = document.getElementById('canvas3d');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Particle animation
+        const particles = [];
+        const particleCount = 20;
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.radius = Math.random() * 2 + 0.5;
+                this.opacity = Math.random() * 0.3 + 0.1;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
+
+                this.x = Math.max(0, Math.min(canvas.width, this.x));
+                this.y = Math.max(0, Math.min(canvas.height, this.y));
+            }
+
+            draw() {
+                ctx.fillStyle = `rgba(99, 102, 241, ${this.opacity})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Initialize particles
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            particles.forEach((particle) => {
+                particle.update();
+                particle.draw();
+            });
+
+            // Draw connecting lines
+            particles.forEach((p1, i) => {
+                particles.slice(i + 1).forEach((p2) => {
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < 200) {
+                        ctx.strokeStyle = `rgba(99, 102, 241, ${0.1 * (1 - distance / 200)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(p1.x, p1.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                });
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+
+        // Smooth scroll enhancement
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
